@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>老板记账</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --blue900:#1a237e;--blue700:#283593;--blue500:#3f51b5;--blue200:#c5cae9;
+  --red:#e53935;--green:#43a047;--grey50:#f5f5f5;--grey200:#eee;--grey400:#bdbdbd;--grey600:#757575;--grey900:#212121;
+  --radius:10px;--nav-h:56px;--header-h:48px;--safe-bottom:env(safe-area-inset-bottom,0px);
+}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--grey50);color:var(--grey900);min-height:100vh;padding-bottom:calc(var(--nav-h) + var(--safe-bottom) + 8px);-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+
+/* header */
+.header{position:sticky;top:0;z-index:100;background:var(--blue900);color:#fff;height:var(--header-h);display:flex;align-items:center;justify-content:space-between;padding:0 14px;font-size:17px;font-weight:600}
+.header .menu-btn{font-size:22px;cursor:pointer;padding:4px 8px;border-radius:6px;background:none;border:none;color:#fff;min-height:44px;min-width:44px;display:flex;align-items:center;justify-content:center}
+.header .menu-btn:active{background:rgba(255,255,255,.15)}
+
+/* pages */
+.page{display:none;padding:10px 12px;animation:fadeIn .2s}
+.page.active{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+
+/* cards */
+.card{background:#fff;border-radius:var(--radius);padding:14px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+
+/* form */
+.form-group{margin-bottom:10px}
+.form-group label{display:block;font-size:13px;color:var(--grey600);margin-bottom:4px;font-weight:500}
+.form-group input,.form-group select{width:100%;height:44px;font-size:16px;padding:0 10px;border:1.5px solid #ddd;border-radius:8px;background:#fff;transition:border-color .2s;-webkit-appearance:none;appearance:none}
+.form-group input:focus,.form-group select:focus{outline:none;border-color:var(--blue500);box-shadow:0 0 0 3px rgba(63,81,181,.12)}
+.form-row{display:flex;gap:8px;align-items:flex-end}
+.form-row .form-group{flex:1}
+.form-row .add-btn{width:44px;height:44px;border-radius:8px;border:1.5px dashed var(--blue500);background:none;color:var(--blue500);font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;margin-bottom:10px;flex-shrink:0}
+.form-row .add-btn:active{background:var(--blue200)}
+
+/* btn */
+.btn{display:inline-flex;align-items:center;justify-content:center;height:46px;padding:0 20px;border-radius:var(--radius);font-size:16px;font-weight:600;border:none;cursor:pointer;transition:opacity .15s;min-width:80px}
+.btn:active{opacity:.75}
+.btn-primary{background:var(--blue500);color:#fff;width:100%}
+.btn-danger{background:var(--red);color:#fff}
+.btn-secondary{background:var(--grey200);color:var(--grey900)}
+.btn-sm{height:34px;padding:0 12px;font-size:13px;border-radius:6px}
+
+/* preview */
+.preview-grid{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.preview-item{position:relative;width:72px;height:72px;border-radius:6px;overflow:hidden;border:1px solid var(--grey200)}
+.preview-item img{width:100%;height:100%;object-fit:cover}
+.preview-item .del-badge{position:absolute;top:2px;right:2px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;font-size:13px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:none}
+
+/* nav */
+.nav{position:fixed;bottom:0;left:0;right:0;z-index:100;background:#fff;border-top:1px solid var(--grey200);display:flex;padding-bottom:var(--safe-bottom);height:calc(var(--nav-h) + var(--safe-bottom))}
+.nav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:12px;color:var(--grey600);cursor:pointer;border:none;background:none;gap:2px;transition:color .2s}
+.nav-item .icon{font-size:22px}
+.nav-item.active{color:var(--blue900);font-weight:600}
+
+/* amount */
+.amount{color:var(--red);font-weight:700}
+.amount-lg{font-size:28px;text-align:center;padding:10px 0}
+
+/* expense list */
+.expense-item{background:#fff;border-radius:var(--radius);padding:12px 14px;margin-bottom:8px;box-shadow:0 1px 2px rgba(0,0,0,.05);cursor:pointer;position:relative;overflow:hidden}
+.expense-item .row1{display:flex;justify-content:space-between;align-items:center}
+.expense-item .date{font-size:12px;color:var(--grey600)}
+.expense-item .project-tag{font-size:12px;background:var(--blue200);color:var(--blue900);padding:2px 8px;border-radius:10px}
+.expense-item .amount{font-size:18px}
+.expense-item .row2{font-size:13px;color:var(--grey600);margin-top:4px}
+.expense-item .actions{display:none;margin-top:8px;gap:6px}
+.expense-item.expanded .actions{display:flex}
+.expense-item .detail{padding-top:8px;font-size:13px;color:var(--grey600);display:none;border-top:1px solid var(--grey200);margin-top:8px}
+.expense-item.expanded .detail{display:block}
+.expense-item .detail-imgs{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.expense-item .detail-imgs img{width:56px;height:56px;object-fit:cover;border-radius:4px;border:1px solid var(--grey200);cursor:pointer}
+.expense-item .edit-row{display:none;margin-top:6px;gap:4px}
+.expense-item.editing .edit-row{display:flex;flex-wrap:wrap}
+.expense-item.editing .row1,.expense-item.editing .row2,.expense-item.editing .detail{display:none}
+.expense-item.editing .actions{display:flex}
+
+/* filter */
+.filter-bar{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.filter-bar select,.filter-bar input{height:38px;font-size:14px;border:1.5px solid #ddd;border-radius:8px;padding:0 8px;background:#fff;flex:1;min-width:0}
+.filter-bar input[type="month"]{flex:1.2}
+
+/* summary */
+.summary-total{text-align:center;padding:16px;margin-bottom:10px}
+.summary-total .label{font-size:14px;color:var(--grey600)}
+.summary-total .value{font-size:36px;color:var(--red);font-weight:800}
+.summary-table{width:100%;border-collapse:collapse;font-size:14px}
+.summary-table th{background:var(--blue900);color:#fff;padding:10px 8px;text-align:left;font-weight:500;font-size:13px}
+.summary-table th:last-child{text-align:right}
+.summary-table td{padding:10px 8px;border-bottom:1px solid var(--grey200)}
+.summary-table td:last-child{text-align:right;font-weight:600}
+.summary-table .total-row td{font-weight:700;border-top:2px solid var(--blue900);background:#f0f0ff}
+.summary-table .clickable{cursor:pointer;color:var(--blue700)}
+.summary-table .clickable:active{background:var(--blue200)}
+
+/* modal */
+.modal-overlay{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.45);display:none;align-items:flex-end;justify-content:center}
+.modal-overlay.show{display:flex}
+.modal{background:#fff;width:100%;max-width:500px;max-height:75vh;border-radius:16px 16px 0 0;overflow:hidden;display:flex;flex-direction:column}
+.modal-header{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--grey200);font-weight:600;font-size:16px}
+.modal-header .close-btn{font-size:24px;cursor:pointer;padding:4px 10px;border:none;background:none;color:var(--grey600);min-height:44px;min-width:44px;display:flex;align-items:center;justify-content:center}
+.modal-body{flex:1;overflow-y:auto;padding:12px 16px}
+.modal-list-item{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--grey200)}
+.modal-list-item .name{font-size:15px}
+.modal-list-item .item-actions{display:flex;gap:6px}
+
+/* menu dropdown */
+.menu-dropdown{position:fixed;top:var(--header-h);right:8px;z-index:150;background:#fff;border-radius:var(--radius);box-shadow:0 4px 16px rgba(0,0,0,.18);display:none;overflow:hidden;min-width:160px}
+.menu-dropdown.show{display:block}
+.menu-dropdown button{display:block;width:100%;text-align:left;padding:12px 16px;border:none;background:none;font-size:15px;cursor:pointer;border-bottom:1px solid var(--grey200);min-height:44px}
+.menu-dropdown button:last-child{border-bottom:none}
+.menu-dropdown button:active{background:var(--grey50)}
+
+/* img fullscreen */
+.img-fullscreen{position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.9);display:none;align-items:center;justify-content:center}
+.img-fullscreen.show{display:flex}
+.img-fullscreen img{max-width:95%;max-height:90%;object-fit:contain}
+.img-fullscreen .close-fs{position:absolute;top:12px;right:16px;color:#fff;font-size:30px;cursor:pointer;z-index:301;padding:8px;min-height:44px;min-width:44px;display:flex;align-items:center;justify-content:center}
+
+/* toast */
+.toast{position:fixed;top:60px;left:50%;transform:translateX(-50%);z-index:400;background:rgba(0,0,0,.8);color:#fff;padding:10px 20px;border-radius:20px;font-size:14px;pointer-events:none;opacity:0;transition:opacity .3s}
+.toast.show{opacity:1}
+
+/* empty */
+.empty{text-align:center;color:var(--grey400);padding:40px 0;font-size:15px}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <span>老板记账</span>
+  <button class="menu-btn" onclick="toggleMenu()">☰</button>
+</div>
+
+<div class="menu-dropdown" id="menuDropdown">
+  <button onclick="openProjectManager()">管理项目</button>
+  <button onclick="openPayerManager()">管理付款人</button>
+  <button onclick="exportCSV()">导出 Excel (CSV)</button>
+</div>
+
+<!-- 页面1: 录入 -->
+<div class="page active" id="page-input">
+  <div class="card">
+    <div class="form-group">
+      <label>日期</label>
+      <input type="date" id="inputDate">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>项目</label>
+        <select id="inputProject"></select>
+      </div>
+      <button class="add-btn" onclick="addQuick('project')">+</button>
+    </div>
+    <div class="form-group">
+      <label>金额</label>
+      <input type="number" id="inputAmount" step="0.01" placeholder="0.00" inputmode="decimal">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>付款人</label>
+        <select id="inputPayer"></select>
+      </div>
+      <button class="add-btn" onclick="addQuick('payer')">+</button>
+    </div>
+    <div class="form-group">
+      <label>备注</label>
+      <input type="text" id="inputNote" placeholder="选填">
+    </div>
+    <div class="form-group">
+      <label>拍照</label>
+      <input type="file" id="inputPhotos" accept="image/*" capture="environment" multiple onchange="handlePhotos(this)" style="height:auto;padding:8px 0;border:none;font-size:14px">
+    </div>
+    <div class="preview-grid" id="photoPreview"></div>
+    <button class="btn btn-primary" style="margin-top:12px" onclick="saveExpense()">保 存</button>
+  </div>
+</div>
+
+<!-- 页面2: 记录 -->
+<div class="page" id="page-records">
+  <div class="filter-bar">
+    <input type="month" id="filterMonth" onchange="loadRecords()">
+    <select id="filterProject" onchange="loadRecords()"><option value="">全部项目</option></select>
+    <select id="filterPayer" onchange="loadRecords()"><option value="">全部付款人</option></select>
+  </div>
+  <div id="recordsList"></div>
+</div>
+
+<!-- 页面3: 汇总 -->
+<div class="page" id="page-summary">
+  <div class="card" style="display:flex;gap:6px">
+    <input type="date" id="sumStart" onchange="loadSummary()" style="flex:1;height:38px;font-size:14px;border:1.5px solid #ddd;border-radius:8px;padding:0 6px">
+    <span style="line-height:38px;color:var(--grey600)">至</span>
+    <input type="date" id="sumEnd" onchange="loadSummary()" style="flex:1;height:38px;font-size:14px;border:1.5px solid #ddd;border-radius:8px;padding:0 6px">
+  </div>
+  <div class="card summary-total">
+    <div class="label">本月总支出</div>
+    <div class="value" id="sumTotal">¥0.00</div>
+  </div>
+  <div class="card" id="sumProject"></div>
+  <div class="card" id="sumPayer"></div>
+</div>
+
+<!-- 底部导航 -->
+<div class="nav">
+  <button class="nav-item active" data-page="page-input" onclick="switchPage('page-input')">
+    <span class="icon">📝</span>录入
+  </button>
+  <button class="nav-item" data-page="page-records" onclick="switchPage('page-records')">
+    <span class="icon">📋</span>记录
+  </button>
+  <button class="nav-item" data-page="page-summary" onclick="switchPage('page-summary')">
+    <span class="icon">📊</span>汇总
+  </button>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
+  <div class="modal" id="modalBox" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <span id="modalTitle"></span>
+      <button class="close-btn" onclick="closeModal()">×</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<!-- Image fullscreen -->
+<div class="img-fullscreen" id="imgFullscreen" onclick="closeImgFullscreen()">
+  <span class="close-fs">×</span>
+  <img id="imgFullscreenImg" src="" alt="">
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================
+   IndexedDB
+   ============================ */
+const DB_NAME='BossAccountBook';const DB_VER=1;
+let db=null;
+function openDB(){return new Promise((resolve,reject)=>{
+  const r=indexedDB.open(DB_NAME,DB_VER);
+  r.onupgradeneeded=e=>{
+    const d=e.target.result;
+    if(!d.objectStoreNames.contains('projects'))d.createObjectStore('projects',{keyPath:'id',autoIncrement:true});
+    if(!d.objectStoreNames.contains('payers'))d.createObjectStore('payers',{keyPath:'id',autoIncrement:true});
+    if(!d.objectStoreNames.contains('expenses')){
+      const s=d.createObjectStore('expenses',{keyPath:'id',autoIncrement:true});
+      s.createIndex('date','date',{unique:false});
+      s.createIndex('project_id','project_id',{unique:false});
+      s.createIndex('payer_id','payer_id',{unique:false});
+    }
+  };
+  r.onsuccess=e=>{db=e.target.result;resolve(db)};
+  r.onerror=()=>reject(r.error);
+})}
+function tx(store,mode='readonly'){return db.transaction(store,mode).objectStore(store)}
+function promisify(req){return new Promise((resolve,reject)=>{req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)})}
+
+/* ============================
+   Toast
+   ============================ */
+let toastTimer;
+function showToast(msg){
+  const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');
+  clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),1800);
+}
+
+/* ============================
+   Menu
+   ============================ */
+function toggleMenu(){
+  document.getElementById('menuDropdown').classList.toggle('show');
+}
+document.addEventListener('click',e=>{
+  const menu=document.getElementById('menuDropdown');
+  if(!e.target.closest('.menu-btn')&&!e.target.closest('.menu-dropdown'))menu.classList.remove('show');
+});
+
+/* ============================
+   Navigation
+   ============================ */
+function switchPage(pageId){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById(pageId).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));
+  document.querySelector(`[data-page="${pageId}"]`).classList.add('active');
+  document.getElementById('menuDropdown').classList.remove('show');
+  if(pageId==='page-records')loadRecords();
+  if(pageId==='page-summary')loadSummary();
+}
+
+/* ============================
+   Load dropdowns
+   ============================ */
+async function loadProjects(selectId,includeAll=false){
+  const sel=document.getElementById(selectId);if(!sel)return;
+  sel.innerHTML=includeAll?'<option value="">全部项目</option>':'';
+  try{
+    const all=await promisify(tx('projects').getAll());
+    all.forEach(p=>{sel.innerHTML+=`<option value="${p.id}">${escHtml(p.name)}</option>`});
+  }catch(e){console.error(e)}
+}
+async function loadPayers(selectId,includeAll=false){
+  const sel=document.getElementById(selectId);if(!sel)return;
+  sel.innerHTML=includeAll?'<option value="">全部付款人</option>':'';
+  try{
+    const all=await promisify(tx('payers').getAll());
+    all.forEach(p=>{sel.innerHTML+=`<option value="${p.id}">${escHtml(p.name)}</option>`});
+  }catch(e){console.error(e)}
+}
+
+/* ============================
+   Quick add
+   ============================ */
+async function addQuick(type){
+  const name=prompt(type==='project'?'输入新项目名称：':'输入新付款人名称：');
+  if(!name||!name.trim())return;
+  const store=type==='project'?'projects':'payers';
+  await promisify(tx(store,'readwrite').add({name:name.trim()}));
+  if(type==='project'){await loadProjects('inputProject');await loadProjects('filterProject',true)}
+  else{await loadPayers('inputPayer');await loadPayers('filterPayer',true)}
+  showToast('已添加');
+}
+
+/* ============================
+   Photo handling
+   ============================ */
+let pendingPhotos=[];
+function handlePhotos(input){
+  const files=Array.from(input.files);
+  files.forEach(file=>{
+    if(!file.type.startsWith('image/'))return;
+    const reader=new FileReader();
+    reader.onload=e=>{
+      const img=new Image();
+      img.onload=()=>{
+        const canvas=document.createElement('canvas');
+        const w=800;const h=Math.round(img.height*(w/img.width));
+        canvas.width=w;canvas.height=h;
+        const ctx=canvas.getContext('2d');ctx.drawImage(img,0,0,w,h);
+        const base64=canvas.toDataURL('image/jpeg',0.7);
+        pendingPhotos.push(base64);
+        renderPhotoPreview();
+      };
+      img.src=e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+  input.value='';
+}
+function renderPhotoPreview(){
+  const container=document.getElementById('photoPreview');
+  container.innerHTML=pendingPhotos.map((p,i)=>`<div class="preview-item"><img src="${p}" alt=""><button class="del-badge" onclick="removePhoto(${i})">×</button></div>`).join('');
+}
+function removePhoto(i){pendingPhotos.splice(i,1);renderPhotoPreview()}
+
+/* ============================
+   Save expense
+   ============================ */
+async function saveExpense(){
+  const date=document.getElementById('inputDate').value;
+  const projectId=document.getElementById('inputProject').value;
+  const amount=parseFloat(document.getElementById('inputAmount').value);
+  const payerId=document.getElementById('inputPayer').value;
+  const note=document.getElementById('inputNote').value.trim();
+
+  if(!date){showToast('请选择日期');return}
+  if(!projectId){showToast('请选择项目');return}
+  if(isNaN(amount)||amount<=0){showToast('请输入有效金额');return}
+
+  const expense={date,project_id:Number(projectId),payer_id:payerId?Number(payerId):null,amount,note,images:pendingPhotos,created_at:new Date().toISOString()};
+  await promisify(tx('expenses','readwrite').add(expense));
+
+  pendingPhotos=[];renderPhotoPreview();
+  document.getElementById('inputAmount').value='';document.getElementById('inputNote').value='';
+  showToast('保存成功');
+}
+
+/* ============================
+   Records
+   ============================ */
+async function loadRecords(){
+  const list=document.getElementById('recordsList');
+  const month=document.getElementById('filterMonth').value;
+  const filterProject=document.getElementById('filterProject').value;
+  const filterPayer=document.getElementById('filterPayer').value;
+  const expenses=await promisify(tx('expenses').getAll());
+  const projects=await promisify(tx('projects').getAll());
+  const payers=await promisify(tx('payers').getAll());
+  const pMap={};projects.forEach(p=>pMap[p.id]=p.name);
+  const pmMap={};payers.forEach(p=>pmMap[p.id]=p.name);
+
+  let filtered=expenses.sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id);
+  if(month)filtered=filtered.filter(e=>e.date.startsWith(month));
+  if(filterProject)filtered=filtered.filter(e=>e.project_id===Number(filterProject));
+  if(filterPayer)filtered=filtered.filter(e=>e.payer_id===Number(filterPayer));
+
+  if(!filtered.length){list.innerHTML='<div class="empty">暂无记录</div>';return}
+  list.innerHTML=filtered.map(e=>{
+    const pn=pMap[e.project_id]||'未知';const pman=pmMap[e.payer_id]||'';
+    return `
+    <div class="expense-item" id="exp-${e.id}" onclick="toggleExpense(${e.id})">
+      <div class="row1">
+        <div><span class="date">${e.date}</span> <span class="project-tag">${escHtml(pn)}</span></div>
+        <span class="amount">¥${e.amount.toFixed(2)}</span>
+      </div>
+      <div class="row2">${pman?'付款人: '+escHtml(pman)+' ':''}${escHtml(e.note||'')}</div>
+      <div class="detail" id="detail-${e.id}">
+        ${pman?`<div>付款人: ${escHtml(pman)}</div>`:''}
+        ${e.note?`<div>备注: ${escHtml(e.note)}</div>`:''}
+        <div class="detail-imgs">${(e.images||[]).map(img=>`<img src="${img}" onclick="event.stopPropagation();viewImage('${img}')" alt="">`).join('')}</div>
+      </div>
+      <div class="edit-row" id="editRow-${e.id}">
+        <input type="date" id="edDate-${e.id}" value="${e.date}" style="width:100%;height:38px;font-size:14px;margin-bottom:4px">
+        <select id="edProject-${e.id}" style="flex:1;height:38px;font-size:14px">${projects.map(p=>`<option value="${p.id}" ${p.id===e.project_id?'selected':''}>${escHtml(p.name)}</option>`).join('')}</select>
+        <input type="number" id="edAmount-${e.id}" value="${e.amount}" step="0.01" style="width:100px;height:38px;font-size:14px">
+        <select id="edPayer-${e.id}" style="flex:1;height:38px;font-size:14px"><option value="">无</option>${payers.map(p=>`<option value="${p.id}" ${p.id===e.payer_id?'selected':''}>${escHtml(p.name)}</option>`).join('')}</select>
+        <input type="text" id="edNote-${e.id}" value="${escHtml(e.note||'')}" style="flex:1;height:38px;font-size:14px" placeholder="备注">
+      </div>
+      <div class="actions" onclick="event.stopPropagation()">
+        <button class="btn btn-sm btn-secondary" id="editBtn-${e.id}" onclick="startEdit(${e.id})">编辑</button>
+        <button class="btn btn-sm btn-primary" id="saveBtn-${e.id}" onclick="saveEdit(${e.id})" style="display:none">保存</button>
+        <button class="btn btn-sm btn-secondary" id="cancelBtn-${e.id}" onclick="cancelEdit(${e.id})" style="display:none">取消</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteExpense(${e.id})">删除</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleExpense(id){
+  const el=document.getElementById('exp-'+id);el.classList.toggle('expanded');
+}
+
+function startEdit(id){
+  const el=document.getElementById('exp-'+id);
+  el.classList.add('editing','expanded');
+  document.getElementById('editBtn-'+id).style.display='none';
+  document.getElementById('saveBtn-'+id).style.display='';
+  document.getElementById('cancelBtn-'+id).style.display='';
+}
+function cancelEdit(id){
+  const el=document.getElementById('exp-'+id);
+  el.classList.remove('editing');
+  document.getElementById('editBtn-'+id).style.display='';
+  document.getElementById('saveBtn-'+id).style.display='none';
+  document.getElementById('cancelBtn-'+id).style.display='none';
+  loadRecords();
+}
+async function saveEdit(id){
+  const date=document.getElementById('edDate-'+id).value;
+  const projectId=Number(document.getElementById('edProject-'+id).value);
+  const amount=parseFloat(document.getElementById('edAmount-'+id).value);
+  const payerId=document.getElementById('edPayer-'+id).value;
+  const note=document.getElementById('edNote-'+id).value.trim();
+  const payerIdNum=payerId?Number(payerId):null;
+
+  if(!date||isNaN(amount)||amount<=0){showToast('日期和金额必填');return}
+
+  const store=tx('expenses','readwrite');
+  const existing=await promisify(store.get(id));
+  if(!existing){showToast('记录不存在');return}
+  Object.assign(existing,{date,project_id:projectId,amount,payer_id:payerIdNum,note});
+  await promisify(store.put(existing));
+  showToast('已保存');loadRecords();
+}
+
+async function deleteExpense(id){
+  if(!confirm('确定删除这条记录吗？'))return;
+  await promisify(tx('expenses','readwrite').delete(id));
+  showToast('已删除');loadRecords();
+}
+
+function viewImage(src){
+  document.getElementById('imgFullscreenImg').src=src;
+  document.getElementById('imgFullscreen').classList.add('show');
+}
+function closeImgFullscreen(){
+  document.getElementById('imgFullscreen').classList.remove('show');
+}
+
+/* ============================
+   Summary
+   ============================ */
+async function loadSummary(){
+  const now=new Date();
+  let s=document.getElementById('sumStart').value;
+  let e=document.getElementById('sumEnd').value;
+  if(!s)s=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
+  if(!e)e=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(new Date(now.getFullYear(),now.getMonth()+1,0).getDate()).padStart(2,'0')}`;
+
+  const expenses=await promisify(tx('expenses').getAll());
+  const projects=await promisify(tx('projects').getAll());
+  const payers=await promisify(tx('payers').getAll());
+  const pMap={};projects.forEach(p=>pMap[p.id]=p.name);
+  const pmMap={};payers.forEach(p=>pmMap[p.id]=p.name);
+
+  const filtered=expenses.filter(ex=>ex.date>=s&&ex.date<=e);
+  const total=filtered.reduce((sum,ex)=>sum+ex.amount,0);
+  document.getElementById('sumTotal').textContent='¥'+total.toFixed(2);
+
+  // by project
+  const pAgg={};filtered.forEach(ex=>{const k=ex.project_id;if(!pAgg[k])pAgg[k]={total:0,count:0,pId:k};pAgg[k].total+=ex.amount;pAgg[k].count++});
+  let pHtml='<table class="summary-table"><thead><tr><th>项目</th><th>记录数</th><th>金额</th></tr></thead><tbody>';
+  Object.values(pAgg).sort((a,b)=>b.total-a.total).forEach(r=>{
+    pHtml+=`<tr class="clickable" onclick="showProjectDetail(${r.pId},'${s}','${e}')"><td>${escHtml(pMap[r.pId]||'未知')}</td><td>${r.count}</td><td class="amount">¥${r.total.toFixed(2)}</td></tr>`;
+  });
+  pHtml+=`<tr class="total-row"><td>合计</td><td>${filtered.length}</td><td class="amount">¥${total.toFixed(2)}</td></tr></tbody></table>`;
+  document.getElementById('sumProject').innerHTML='<div style="font-weight:600;margin-bottom:8px;font-size:15px">按项目汇总</div>'+pHtml;
+
+  // by payer
+  const pmAgg={};filtered.forEach(ex=>{const k=ex.payer_id||0;if(!pmAgg[k])pmAgg[k]={total:0};pmAgg[k].total+=ex.amount});
+  let pmHtml='<table class="summary-table"><thead><tr><th>付款人</th><th>金额</th></tr></thead><tbody>';
+  Object.entries(pmAgg).sort((a,b)=>b[1].total-a[1].total).forEach(([k,v])=>{
+    pmHtml+=`<tr><td>${k==='0'?'未指定':escHtml(pmMap[Number(k)]||'未知')}</td><td class="amount">¥${v.total.toFixed(2)}</td></tr>`;
+  });
+  pmHtml+=`<tr class="total-row"><td>合计</td><td class="amount">¥${total.toFixed(2)}</td></tr></tbody></table>`;
+  document.getElementById('sumPayer').innerHTML='<div style="font-weight:600;margin-bottom:8px;font-size:15px">按付款人汇总</div>'+pmHtml;
+}
+
+async function showProjectDetail(projectId,s,e){
+  const expenses=await promisify(tx('expenses').getAll());
+  const projects=await promisify(tx('projects').getAll());
+  const payers=await promisify(tx('payers').getAll());
+  const pMap={};projects.forEach(p=>pMap[p.id]=p.name);
+  const pmMap={};payers.forEach(p=>pmMap[p.id]=p.name);
+  const pn=pMap[projectId]||'未知';
+
+  const filtered=expenses.filter(ex=>ex.project_id===projectId&&ex.date>=s&&ex.date<=e);
+  const pmAgg={};filtered.forEach(ex=>{const k=ex.payer_id||0;if(!pmAgg[k])pmAgg[k]={total:0,count:0};pmAgg[k].total+=ex.amount;pmAgg[k].count++});
+  const total=filtered.reduce((sum,ex)=>sum+ex.amount,0);
+
+  let html=`<div style="font-weight:600;margin-bottom:8px">${escHtml(pn)} — 付款人分布</div>`;
+  html+='<table class="summary-table"><thead><tr><th>付款人</th><th>记录数</th><th>金额</th></tr></thead><tbody>';
+  Object.entries(pmAgg).sort((a,b)=>b[1].total-a[1].total).forEach(([k,v])=>{
+    html+=`<tr><td>${k==='0'?'未指定':escHtml(pmMap[Number(k)]||'未知')}</td><td>${v.count}</td><td class="amount">¥${v.total.toFixed(2)}</td></tr>`;
+  });
+  html+=`<tr class="total-row"><td>合计</td><td>${filtered.length}</td><td class="amount">¥${total.toFixed(2)}</td></tr></tbody></table>`;
+
+  openModal('项目详情',html);
+}
+
+/* ============================
+   Modal
+   ============================ */
+function openModal(title,html){
+  document.getElementById('modalTitle').textContent=title;
+  document.getElementById('modalBody').innerHTML=html;
+  document.getElementById('modalOverlay').classList.add('show');
+}
+function closeModal(e){
+  if(e&&e.target!==document.getElementById('modalOverlay'))return;
+  document.getElementById('modalOverlay').classList.remove('show');
+}
+
+/* ============================
+   Project / Payer Manager
+   ============================ */
+async function openProjectManager(){
+  const projects=await promisify(tx('projects').getAll());
+  const expenses=await promisify(tx('expenses').getAll());
+  const counts={};expenses.forEach(e=>counts[e.project_id]=(counts[e.project_id]||0)+1);
+  let html=projects.map(p=>`
+    <div class="modal-list-item">
+      <span class="name">${escHtml(p.name)}${counts[p.id]?` <small style="color:var(--grey400)">(${counts[p.id]}条记录)</small>`:''}</span>
+      <div class="item-actions">
+        <button class="btn btn-sm btn-secondary" onclick="renameItem('projects',${p.id},'${escAttr(p.name)}')">重命名</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteItem('projects',${p.id},${counts[p.id]||0})">删除</button>
+      </div>
+    </div>`).join('');
+  if(!html)html='<div class="empty">暂无项目</div>';
+  html='<button class="btn btn-primary" style="margin-bottom:10px" onclick="addItemQuick(\'projects\')">+ 添加项目</button>'+html;
+  openModal('管理项目',html);
+}
+async function openPayerManager(){
+  const payers=await promisify(tx('payers').getAll());
+  const expenses=await promisify(tx('expenses').getAll());
+  const counts={};expenses.forEach(e=>counts[e.payer_id]=(counts[e.payer_id]||0)+1);
+  let html=payers.map(p=>`
+    <div class="modal-list-item">
+      <span class="name">${escHtml(p.name)}${counts[p.id]?` <small style="color:var(--grey400)">(${counts[p.id]}条记录)</small>`:''}</span>
+      <div class="item-actions">
+        <button class="btn btn-sm btn-secondary" onclick="renameItem('payers',${p.id},'${escAttr(p.name)}')">重命名</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteItem('payers',${p.id},${counts[p.id]||0})">删除</button>
+      </div>
+    </div>`).join('');
+  if(!html)html='<div class="empty">暂无付款人</div>';
+  html='<button class="btn btn-primary" style="margin-bottom:10px" onclick="addItemQuick(\'payers\')">+ 添加付款人</button>'+html;
+  openModal('管理付款人',html);
+}
+async function addItemQuick(storeName){
+  const label=storeName==='projects'?'项目':'付款人';
+  const name=prompt(`输入新${label}名称：`);
+  if(!name||!name.trim())return;
+  await promisify(tx(storeName,'readwrite').add({name:name.trim()}));
+  closeModal();showToast('已添加');
+  if(storeName==='projects')openProjectManager();else openPayerManager();
+  await loadProjects('inputProject');await loadProjects('filterProject',true);
+  await loadPayers('inputPayer');await loadPayers('filterPayer',true);
+}
+async function renameItem(storeName,id,oldName){
+  const name=prompt('新名称：',oldName);
+  if(!name||!name.trim()||name.trim()===oldName)return;
+  const store=tx(storeName,'readwrite');
+  const item=await promisify(store.get(id));
+  if(!item)return;
+  item.name=name.trim();
+  await promisify(store.put(item));
+  closeModal();showToast('已重命名');
+  if(storeName==='projects'){openProjectManager();await loadProjects('inputProject');await loadProjects('filterProject',true)}
+  else{openPayerManager();await loadPayers('inputPayer');await loadPayers('filterPayer',true)}
+}
+async function deleteItem(storeName,id,count){
+  if(count>0){alert(`该项目下有 ${count} 条支出记录，无法删除。`);return}
+  if(!confirm('确定删除吗？'))return;
+  await promisify(tx(storeName,'readwrite').delete(id));
+  closeModal();showToast('已删除');
+  if(storeName==='projects'){openProjectManager();await loadProjects('inputProject');await loadProjects('filterProject',true)}
+  else{openPayerManager();await loadPayers('inputPayer');await loadPayers('filterPayer',true)}
+}
+
+/* ============================
+   Export CSV
+   ============================ */
+async function exportCSV(){
+  const expenses=await promisify(tx('expenses').getAll());
+  const projects=await promisify(tx('projects').getAll());
+  const payers=await promisify(tx('payers').getAll());
+  const pMap={};projects.forEach(p=>pMap[p.id]=p.name);
+  const pmMap={};payers.forEach(p=>pmMap[p.id]=p.name);
+
+  expenses.sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id);
+
+  const BOM='\uFEFF';
+  let csv=BOM+'日期,项目,付款人,金额,备注\n';
+  expenses.forEach(e=>{
+    csv+=`${e.date},${csvEscape(pMap[e.project_id]||'')},${csvEscape(pmMap[e.payer_id]||'')},${e.amount.toFixed(2)},${csvEscape(e.note||'')}\n`;
+  });
+
+  csv+='\n\n'+BOM+'按项目汇总\n项目,记录数,金额\n';
+  const pAgg={};expenses.forEach(e=>{const k=e.project_id;if(!pAgg[k])pAgg[k]={total:0,count:0};pAgg[k].total+=e.amount;pAgg[k].count++});
+  Object.values(pAgg).sort((a,b)=>b.total-a.total).forEach(r=>{
+    csv+=`${csvEscape(pMap[r.pId]||'')},${r.count},${r.total.toFixed(2)}\n`;
+  });
+  const gTotal=expenses.reduce((s,e)=>s+e.amount,0);
+  csv+=`合计,${expenses.length},${gTotal.toFixed(2)}\n`;
+
+  csv+='\n\n'+BOM+'按付款人汇总\n付款人,金额\n';
+  const pmAgg={};expenses.forEach(e=>{const k=e.payer_id||0;if(!pmAgg[k])pmAgg[k]={total:0};pmAgg[k].total+=e.amount});
+  Object.entries(pmAgg).sort((a,b)=>b[1].total-a[1].total).forEach(([k,v])=>{
+    csv+=`${csvEscape(k==='0'?'未指定':pmMap[Number(k)]||'')},${v.total.toFixed(2)}\n`;
+  });
+  csv+=`合计,${gTotal.toFixed(2)}\n`;
+
+  const now=new Date();
+  const fn=`老板记账_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}.csv`;
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download=fn;document.body.appendChild(a);a.click();
+  document.body.removeChild(a);URL.revokeObjectURL(url);
+  showToast('导出成功');
+  document.getElementById('menuDropdown').classList.remove('show');
+}
+
+function csvEscape(s){
+  if(!s)return '';
+  s=String(s);
+  if(s.includes(',')||s.includes('"')||s.includes('\n'))return '"'+s.replace(/"/g,'""')+'"';
+  return s;
+}
+function escHtml(s){if(!s)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function escAttr(s){if(!s)return'';return String(s).replace(/'/g,"\\'").replace(/"/g,'&quot;')}
+
+/* ============================
+   Init
+   ============================ */
+(async function init(){
+  await openDB();
+  // set default date
+  const now=new Date();
+  document.getElementById('inputDate').value=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  document.getElementById('filterMonth').value=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  document.getElementById('sumStart').value=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
+  document.getElementById('sumEnd').value=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(new Date(now.getFullYear(),now.getMonth()+1,0).getDate()).padStart(2,'0')}`;
+
+  await loadProjects('inputProject');await loadProjects('filterProject',true);
+  await loadPayers('inputPayer');await loadPayers('filterPayer',true);
+  loadRecords();loadSummary();
+})();
+</script>
+</body>
+</html>
