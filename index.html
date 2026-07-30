@@ -60,6 +60,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .amount{color:var(--red);font-weight:700}
 .amount-lg{font-size:28px;text-align:center;padding:10px 0}
 
+/* icon buttons */
+.icon-btn{width:36px;height:36px;border-radius:50%;border:none;background:transparent;font-size:16px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.icon-btn:active{background:var(--grey200)}
+.icon-btn.danger{color:var(--red)}
+.icon-btn.danger:active{background:#ffebee}
+.note-text{font-size:12px;color:var(--grey400);margin-top:2px}
+
 /* expense list */
 .expense-item{background:#fff;border-radius:var(--radius);padding:12px 14px;margin-bottom:8px;box-shadow:0 1px 2px rgba(0,0,0,.05);cursor:pointer;position:relative;overflow:hidden}
 .expense-item .row1{display:flex;justify-content:space-between;align-items:center}
@@ -67,16 +74,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .expense-item .project-tag{font-size:12px;background:var(--blue200);color:var(--blue900);padding:2px 8px;border-radius:10px}
 .expense-item .amount{font-size:18px}
 .expense-item .row2{font-size:13px;color:var(--grey600);margin-top:4px}
-.expense-item .actions{display:none;margin-top:8px;gap:6px}
-.expense-item.expanded .actions{display:flex}
+
 .expense-item .detail{padding-top:8px;font-size:13px;color:var(--grey600);display:none;border-top:1px solid var(--grey200);margin-top:8px}
 .expense-item.expanded .detail{display:block}
 .expense-item .detail-imgs{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
 .expense-item .detail-imgs img{width:56px;height:56px;object-fit:cover;border-radius:4px;border:1px solid var(--grey200);cursor:pointer}
-.expense-item .edit-row{display:none;margin-top:6px;gap:4px}
-.expense-item.editing .edit-row{display:flex;flex-wrap:wrap}
-.expense-item.editing .row1,.expense-item.editing .row2,.expense-item.editing .detail{display:none}
-.expense-item.editing .actions{display:flex}
+
 
 /* filter */
 .filter-bar{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
@@ -175,7 +178,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
       <input type="file" id="inputPhotos" accept="image/*" capture="environment" multiple onchange="handlePhotos(this)" style="height:auto;padding:8px 0;border:none;font-size:14px">
     </div>
     <div class="preview-grid" id="photoPreview"></div>
-    <button class="btn btn-primary" style="margin-top:12px" onclick="saveExpense()">保 存</button>
+    <button class="btn btn-primary" id="saveBtn" style="margin-top:12px" onclick="saveExpense()">保 存</button>
   </div>
 </div>
 
@@ -373,12 +376,33 @@ async function saveExpense(){
   if(!projectId){showToast('请选择项目');return}
   if(isNaN(amount)||amount<=0){showToast('请输入有效金额');return}
 
-  const expense={date,project_id:Number(projectId),payer_id:payerId?Number(payerId):null,amount,note,images:pendingPhotos,created_at:new Date().toISOString()};
-  await promisify(tx('expenses','readwrite').add(expense));
+  const expense={date,project_id:Number(projectId),payer_id:payerId?Number(payerId):null,amount,note,images:[...pendingPhotos]};
+  const store=tx('expenses','readwrite');
+
+  let isUpdate=false;
+  if(editingExpenseId!==null){
+    // Update existing record
+    const existing=await promisify(store.get(editingExpenseId));
+    if(!existing){showToast('记录不存在');return}
+    existing.date=date;
+    existing.project_id=expense.project_id;
+    existing.payer_id=expense.payer_id;
+    existing.amount=amount;
+    existing.note=note;
+    existing.images=expense.images;
+    await promisify(store.put(existing));
+    isUpdate=true;
+    editingExpenseId=null;
+  }else{
+    expense.created_at=new Date().toISOString();
+    await promisify(store.add(expense));
+  }
 
   pendingPhotos=[];renderPhotoPreview();
   document.getElementById('inputAmount').value='';document.getElementById('inputNote').value='';
-  showToast('保存成功');
+  document.getElementById('saveBtn').textContent='保 存';
+  showToast(isUpdate?'已更新':'保存成功');
+  switchPage('page-records');
 }
 
 /* ============================
@@ -404,72 +428,53 @@ async function loadRecords(){
   list.innerHTML=filtered.map(e=>{
     const pn=pMap[e.project_id]||'未知';const pman=pmMap[e.payer_id]||'';
     return `
-    <div class="expense-item" id="exp-${e.id}" onclick="toggleExpense(${e.id})">
+    <div class="expense-item" id="exp-${e.id}" onclick="toggleDetail(${e.id})">
       <div class="row1">
-        <div><span class="date">${e.date}</span> <span class="project-tag">${escHtml(pn)}</span></div>
+        <div style="flex:1;min-width:0">
+          <div><span class="date">${e.date}</span> <span class="project-tag">${escHtml(pn)}</span></div>
+          <div class="row2">${pman?'付款人: '+escHtml(pman):''}</div>
+          ${e.note?`<div class="note-text">备注: ${escHtml(e.note)}</div>`:''}
+        </div>
         <span class="amount">¥${e.amount.toFixed(2)}</span>
+        <button class="icon-btn" onclick="event.stopPropagation();startEditExpense(${e.id})" title="修改">✏️</button>
+        <button class="icon-btn danger" onclick="event.stopPropagation();deleteExpenseRecord(${e.id})" title="删除">🗑️</button>
       </div>
-      <div class="row2">${pman?'付款人: '+escHtml(pman)+' ':''}${escHtml(e.note||'')}</div>
       <div class="detail" id="detail-${e.id}">
         ${pman?`<div>付款人: ${escHtml(pman)}</div>`:''}
         ${e.note?`<div>备注: ${escHtml(e.note)}</div>`:''}
         <div class="detail-imgs">${(e.images||[]).map(img=>`<img src="${img}" onclick="event.stopPropagation();viewImage('${img}')" alt="">`).join('')}</div>
       </div>
-      <div class="edit-row" id="editRow-${e.id}">
-        <input type="date" id="edDate-${e.id}" value="${e.date}" style="width:100%;height:38px;font-size:14px;margin-bottom:4px">
-        <select id="edProject-${e.id}" style="flex:1;height:38px;font-size:14px">${projects.map(p=>`<option value="${p.id}" ${p.id===e.project_id?'selected':''}>${escHtml(p.name)}</option>`).join('')}</select>
-        <input type="number" id="edAmount-${e.id}" value="${e.amount}" step="0.01" style="width:100px;height:38px;font-size:14px">
-        <select id="edPayer-${e.id}" style="flex:1;height:38px;font-size:14px"><option value="">无</option>${payers.map(p=>`<option value="${p.id}" ${p.id===e.payer_id?'selected':''}>${escHtml(p.name)}</option>`).join('')}</select>
-        <input type="text" id="edNote-${e.id}" value="${escHtml(e.note||'')}" style="flex:1;height:38px;font-size:14px" placeholder="备注">
-      </div>
-      <div class="actions" onclick="event.stopPropagation()">
-        <button class="btn btn-sm btn-secondary" id="editBtn-${e.id}" onclick="startEdit(${e.id})">编辑</button>
-        <button class="btn btn-sm btn-primary" id="saveBtn-${e.id}" onclick="saveEdit(${e.id})" style="display:none">保存</button>
-        <button class="btn btn-sm btn-secondary" id="cancelBtn-${e.id}" onclick="cancelEdit(${e.id})" style="display:none">取消</button>
-        <button class="btn btn-sm btn-danger" onclick="deleteExpense(${e.id})">删除</button>
-      </div>
     </div>`;
   }).join('');
 }
 
-function toggleExpense(id){
+let editingExpenseId=null;
+
+function toggleDetail(id){
   const el=document.getElementById('exp-'+id);el.classList.toggle('expanded');
 }
 
-function startEdit(id){
-  const el=document.getElementById('exp-'+id);
-  el.classList.add('editing','expanded');
-  document.getElementById('editBtn-'+id).style.display='none';
-  document.getElementById('saveBtn-'+id).style.display='';
-  document.getElementById('cancelBtn-'+id).style.display='';
-}
-function cancelEdit(id){
-  const el=document.getElementById('exp-'+id);
-  el.classList.remove('editing');
-  document.getElementById('editBtn-'+id).style.display='';
-  document.getElementById('saveBtn-'+id).style.display='none';
-  document.getElementById('cancelBtn-'+id).style.display='none';
-  loadRecords();
-}
-async function saveEdit(id){
-  const date=document.getElementById('edDate-'+id).value;
-  const projectId=Number(document.getElementById('edProject-'+id).value);
-  const amount=parseFloat(document.getElementById('edAmount-'+id).value);
-  const payerId=document.getElementById('edPayer-'+id).value;
-  const note=document.getElementById('edNote-'+id).value.trim();
-  const payerIdNum=payerId?Number(payerId):null;
+async function startEditExpense(id){
+  const record=await promisify(tx('expenses').get(id));
+  if(!record){showToast('记录不存在');return}
 
-  if(!date||isNaN(amount)||amount<=0){showToast('日期和金额必填');return}
+  editingExpenseId=id;
+  document.getElementById('inputDate').value=record.date;
+  document.getElementById('inputProject').value=record.project_id;
+  document.getElementById('inputAmount').value=record.amount;
+  document.getElementById('inputPayer').value=record.payer_id||'';
+  document.getElementById('inputNote').value=record.note||'';
+  document.getElementById('saveBtn').textContent='更 新';
 
-  const store=tx('expenses','readwrite');
-  const existing=await promisify(store.get(id));
-  if(!existing){showToast('记录不存在');return}
-  Object.assign(existing,{date,project_id:projectId,amount,payer_id:payerIdNum,note});
-  await promisify(store.put(existing));
-  showToast('已保存');loadRecords();
+  // Load existing photos into pendingPhotos
+  pendingPhotos=[...(record.images||[])];
+  renderPhotoPreview();
+
+  switchPage('page-input');
+  showToast('正在编辑记录，修改后点击更新');
 }
 
-async function deleteExpense(id){
+async function deleteExpenseRecord(id){
   if(!confirm('确定删除这条记录吗？'))return;
   await promisify(tx('expenses','readwrite').delete(id));
   showToast('已删除');loadRecords();
